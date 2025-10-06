@@ -4,11 +4,17 @@ import com.technicalchallenge.dto.TradeLegDTO;
 import com.technicalchallenge.mapper.TradeLegMapper;
 import com.technicalchallenge.model.TradeLeg;
 import com.technicalchallenge.service.TradeLegService;
+
+import io.micrometer.core.ipc.http.HttpSender.Response;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
-
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -66,4 +72,19 @@ public class TradeLegController {
         tradeLegService.deleteTradeLeg(id);
         return ResponseEntity.noContent().build();
     }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<String> handleMethodArgumentNotValid(MethodArgumentNotValidException e){
+        String message = e.getBindingResult().getFieldErrors().stream().map(DefaultMessageSourceResolvable::getDefaultMessage).findFirst().orElse("Validation failed");
+        return ResponseEntity.badRequest().body(message);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+public ResponseEntity<String> handleConstraintViolation(ConstraintViolationException e) {
+    String message = e.getConstraintViolations().stream()
+            .map(ConstraintViolation::getMessage)
+            .findFirst()
+            .orElse("Validation failed");
+    return ResponseEntity.badRequest().body(message);
+}
 }
