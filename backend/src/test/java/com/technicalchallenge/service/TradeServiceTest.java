@@ -94,7 +94,12 @@ class TradeServiceTest {
     @Test
     void testCreateTrade_Success() {
         // Given
-        when(tradeRepository.save(any(Trade.class))).thenReturn(trade);
+        when(bookRepository.findByBookName("TestBook")).thenReturn(Optional.of(new Book()));
+        when(counterpartyRepository.findByName("TestCounterparty")).thenReturn(Optional.of(new Counterparty()));
+        when(tradeStatusRepository.findByTradeStatus("NEW")).thenReturn(Optional.of(new TradeStatus()));
+
+        when(tradeRepository.save(any(Trade.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // When
         Trade result = tradeService.createTrade(tradeDTO);
@@ -159,11 +164,15 @@ class TradeServiceTest {
 
     @Test
     void testAmendTrade_Success() {
+
+        trade.setVersion(1);
+
         // Given
         when(tradeRepository.findByTradeIdAndActiveTrue(100001L)).thenReturn(Optional.of(trade));
         when(tradeStatusRepository.findByTradeStatus("AMENDED"))
                 .thenReturn(Optional.of(new com.technicalchallenge.model.TradeStatus()));
-        when(tradeRepository.save(any(Trade.class))).thenReturn(trade);
+        when(tradeRepository.save(any(Trade.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // When
         Trade result = tradeService.amendTrade(100001L, tradeDTO);
