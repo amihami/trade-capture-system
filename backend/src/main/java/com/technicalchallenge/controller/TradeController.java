@@ -11,6 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -66,6 +70,47 @@ public class TradeController {
                 .map(tradeMapper::toDto)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Search trades multicriteria and paginated", description = "Search by counterparty, book, trader, status and date range. Supports large result sets with pagination.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = TradeDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid query parameters"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+
+    public ResponseEntity<Page<TradeDTO>> searchTrades(
+            @Parameter(description = "Counterparty name (contains, case-insensitive)") @RequestParam(required = false) String counterparty,
+            @Parameter(description = "Book name (contains, case-insensitive)") @RequestParam(required = false) String book,
+            @Parameter(description = "Trader (first name / last name / loginId contains, case-insensitive)") @RequestParam(required = false) String trader,
+            @Parameter(description = "Trade status (exact match, e.g. NEW, AMENDED, CANCELLED)") @RequestParam(required = false) String status,
+            @Parameter(description = "Start of trade date range (inclusive, ISO-8601: yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @Parameter(description = "End of trade date range (inclusive, ISO-8601: yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            Pageable pageable) {
+        TradeDTO criteria = new TradeDTO();
+        criteria.setCounterpartyName(counterparty);
+        criteria.setBookName(book);
+        criteria.setTradeStatus(status);
+        criteria.setValidityStartDate(dateFrom);
+        criteria.setValidityEndDate(dateTo);
+
+        Page<Trade> page = tradeService.searchTrades(criteria, pageable);
+        Page<TradeDTO> dtoPage = page.map(tradeMapper::toDto);
+        return ResponseEntity.ok(dtoPage);
+    }
+
+    @GetMapping("/filter")
+    @Operation(summary = "List trades, paginated blotter", description = "Returns paginated list of trades without filters. Combine with pageable query params (?page=&size=&sort).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = TradeDTO.class))),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+
+    public ResponseEntity<Page<TradeDTO>> filterTrades(Pageable pageable) {
+        Page<Trade> page = tradeService.filterTrades(pageable);
+        Page<TradeDTO> dtoPage = page.map(tradeMapper::toDto);
+        return ResponseEntity.ok(dtoPage);
     }
 
     @PostMapping
