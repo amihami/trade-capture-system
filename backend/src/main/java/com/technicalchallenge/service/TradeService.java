@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import com.technicalchallenge.repository.TradeSpecifications;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -66,6 +70,45 @@ public class TradeService {
         logger.debug("Retrieving trade by id: {}", tradeId);
         return tradeRepository.findByTradeIdAndActiveTrue(tradeId);
     }
+
+
+    @Transactional
+    public Page<Trade> searchTrades(TradeDTO criteria, Pageable pageable){
+        if (criteria == null) {
+            logger.info("Search criteria is null, returning paginated results without filters.");
+            return tradeRepository.findAll(pageable);
+        }
+
+        String counterparty = criteria.getCounterpartyName();
+        String book = criteria.getBookName();
+        String trader = criteria.getTraderUserName();
+        String status = criteria.getTradeStatus();
+
+        LocalDate dateFrom = criteria.getValidityStartDate();
+        LocalDate dateTo = criteria.getValidityEndDate();
+        if (dateFrom == null && criteria.getTradeDate() != null){
+            dateFrom = criteria.getTradeDate();
+        }
+        if (dateTo == null && criteria.getTradeDate() != null){
+            dateTo = criteria.getTradeDate();
+        }
+        logger.info("Executing trade search, counterparty: {}, book: {}, trader: {}, status: {}, dateFrom: {}, dateTo: {}", counterparty, book, trader, status, dateFrom, dateTo);
+
+        Specification<Trade> spec = TradeSpecifications.build(counterparty, book, trader, status, dateFrom, dateTo);
+
+        Page<Trade> page = tradeRepository.findAll(spec, pageable);
+        logger.info("Trade search returned {} results (page {}/{})",
+        page.getTotalElements(), page.getNumber() + 1, page.getTotalPages());
+
+        return page;
+    }
+
+    @Transactional
+    public Page<Trade> filterTrades(Pageable pageable){
+        logger.info("Fetching paginated list of all trades");
+        return tradeRepository.findAll(pageable);
+    }
+
 
     @Transactional
     public Trade createTrade(TradeDTO tradeDTO) {
