@@ -5,6 +5,8 @@ import com.technicalchallenge.mapper.TradeMapper;
 import com.technicalchallenge.model.Trade;
 import com.technicalchallenge.repository.RsqlSpecificationBuilder;
 import com.technicalchallenge.service.TradeService;
+import com.technicalchallenge.service.TradeValidationService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
@@ -45,6 +47,8 @@ public class TradeController {
     private TradeService tradeService;
     @Autowired
     private TradeMapper tradeMapper;
+    @Autowired
+    private TradeValidationService tradeValidationService;
 
     @GetMapping
     @Operation(summary = "Get all trades", description = "Retrieves a list of all trades in the system. Returns comprehensive trade information including legs and cashflows.")
@@ -121,6 +125,7 @@ public class TradeController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = TradeDTO.class))),
             @ApiResponse(responseCode = "400", description = "Invalid RSQL query"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges to create trade"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
 
@@ -132,7 +137,7 @@ public class TradeController {
                 return ResponseEntity.badRequest().body("Query must not be blank.");
             }
 
-            Specification<Trade> spec = RsqlSpecificationBuilder.fromRsql(rsql);
+            Specification<Trade> spec = RsqlSpecificationBuilder.from(rsql);
 
             Page<Trade> page = tradeService.searchBySpecification(spec, pageable);
 
@@ -158,7 +163,26 @@ public class TradeController {
             @ApiResponse(responseCode = "500", description = "Internal server error during trade creation")
     })
     public ResponseEntity<?> createTrade(
-            @Parameter(description = "Trade details for creation", required = true) @Valid @RequestBody TradeDTO tradeDTO) {
+            @Parameter(description = "Trade details for creation", required = true) @Valid @RequestBody TradeDTO tradeDTO,
+            @RequestParam(name = "performedBy", required = false) String performedBy) {
+
+        if (performedBy == null || performedBy.isBlank()) {
+            if (tradeDTO.getTradeInputterUserId() != null) {
+                performedBy = String.valueOf(tradeDTO.getTradeInputterUserId());
+            } else if (tradeDTO.getInputterUserName() != null && !tradeDTO.getInputterUserName().isBlank()) {
+                performedBy = tradeDTO.getInputterUserName();
+            } else if (tradeDTO.getTraderUserId() != null) {
+                performedBy = String.valueOf(tradeDTO.getTraderUserId());
+            } else if (tradeDTO.getTraderUserName() != null && !tradeDTO.getTraderUserName().isBlank()) {
+                performedBy = tradeDTO.getTraderUserName();
+            }
+        }
+
+        if (performedBy == null || !tradeValidationService.validateUserPrivileges(
+                performedBy, TradeValidationService.OPERATION_CREATE, tradeDTO)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("User not authorised to CREATE trades.");
+        }
 
         boolean bookMissing = tradeDTO.getBookId() == null
                 && (tradeDTO.getBookName() == null || tradeDTO.getBookName().isBlank());
@@ -191,7 +215,8 @@ public class TradeController {
     })
     public ResponseEntity<?> updateTrade(
             @Parameter(description = "Unique identifier of the trade to update", required = true) @PathVariable Long id,
-            @Parameter(description = "Updated trade details", required = true) @Valid @RequestBody TradeDTO tradeDTO) {
+            @Parameter(description = "Updated trade details", required = true) @Valid @RequestBody TradeDTO tradeDTO,
+            @RequestParam(name = "performedBy", required = false) String performedBy) {
         logger.info("Updating trade with id: {}", id);
 
         if (tradeDTO.getTradeId() != null && !tradeDTO.getTradeId().equals(id)) {
@@ -202,6 +227,24 @@ public class TradeController {
             if (tradeDTO.getTradeId() == null) {
                 tradeDTO.setTradeId(id);
             } // Ensure the ID matches
+
+            if (performedBy == null || performedBy.isBlank()) {
+                if (tradeDTO.getTradeInputterUserId() != null) {
+                    performedBy = String.valueOf(tradeDTO.getTradeInputterUserId());
+                } else if (tradeDTO.getInputterUserName() != null && !tradeDTO.getInputterUserName().isBlank()) {
+                    performedBy = tradeDTO.getInputterUserName();
+                } else if (tradeDTO.getTraderUserId() != null) {
+                    performedBy = String.valueOf(tradeDTO.getTraderUserId());
+                } else if (tradeDTO.getTraderUserName() != null && !tradeDTO.getTraderUserName().isBlank()) {
+                    performedBy = tradeDTO.getTraderUserName();
+                }
+            }
+
+            if (performedBy == null || !tradeValidationService.validateUserPrivileges(
+                    performedBy, TradeValidationService.OPERATION_AMEND, tradeDTO)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("User not authorised to AMEND trades.");
+            }
 
             Trade trade = tradeMapper.toEntity(tradeDTO);
             tradeService.populateReferenceDataByName(trade, tradeDTO);
@@ -249,8 +292,17 @@ public class TradeController {
             @ApiResponse(responseCode = "403", description = "Insufficient privileges to terminate trade")
     })
     public ResponseEntity<?> terminateTrade(
-            @Parameter(description = "Unique identifier of the trade to terminate", required = true) @PathVariable Long id) {
-        logger.info("Terminating trade with id: {}", id);
+            @Parameter(description = "Unique identifier of the trade to terminate", required = true) @PathVariable Long id,
+            @RequestParam(name = "performedBy") String performedBy) {
+        logger.info("Terminating trade with id: {} by [{}]", id, performedBy);
+
+        if (performedBy == null || performedBy.isBlank()
+                || !tradeValidationService.validateUserPrivileges(
+                        performedBy, TradeValidationService.OPERATION_TERMINATE, null)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("User not authorised to TERMINATE trades.");
+        }
+
         try {
             Trade terminatedTrade = tradeService.terminateTrade(id);
             TradeDTO responseDTO = tradeMapper.toDto(terminatedTrade);
@@ -270,8 +322,16 @@ public class TradeController {
             @ApiResponse(responseCode = "403", description = "Insufficient privileges to cancel trade")
     })
     public ResponseEntity<?> cancelTrade(
-            @Parameter(description = "Unique identifier of the trade to cancel", required = true) @PathVariable Long id) {
-        logger.info("Cancelling trade with id: {}", id);
+            @Parameter(description = "Unique identifier of the trade to cancel", required = true) @PathVariable Long id,
+            @RequestParam(name = "performedBy") String performedBy) {
+        logger.info("Cancelling trade with id: {} by [{}]", id, performedBy);
+
+        if (performedBy == null || performedBy.isBlank()
+                || !tradeValidationService.validateUserPrivileges(
+                        performedBy, TradeValidationService.OPERATION_CANCEL, null)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("User not authorised to CANCEL trades.");
+        }
         try {
             Trade cancelledTrade = tradeService.cancelTrade(id);
             TradeDTO responseDTO = tradeMapper.toDto(cancelledTrade);
