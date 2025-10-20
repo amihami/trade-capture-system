@@ -3,6 +3,7 @@ package com.technicalchallenge.controller;
 import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.mapper.TradeMapper;
 import com.technicalchallenge.model.Trade;
+import com.technicalchallenge.repository.RsqlSpecificationBuilder;
 import com.technicalchallenge.service.TradeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
@@ -13,8 +14,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -111,6 +114,40 @@ public class TradeController {
         Page<Trade> page = tradeService.filterTrades(pageable);
         Page<TradeDTO> dtoPage = page.map(tradeMapper::toDto);
         return ResponseEntity.ok(dtoPage);
+    }
+
+    @GetMapping("/rsql")
+    @Operation(summary = "Search trades with RSQL for power users", description = "Supports ==, !=, =in=, =out=, =ge=, =le=, =gt=, =lt= and nested fields. Returns paginated results.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = TradeDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid RSQL query"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+
+    public ResponseEntity<?> rsqlSearch(
+            @Parameter(description = "RSQL query string, e.g. counterparty.name==ABC;tradeDate=ge=2025-01-01") @RequestParam(name = "query") String rsql,
+            Pageable pageable) {
+        try {
+            if (rsql == null || rsql.isBlank()) {
+                return ResponseEntity.badRequest().body("Query must not be blank.");
+            }
+
+            Specification<Trade> spec = RsqlSpecificationBuilder.fromRsql(rsql);
+
+            Page<Trade> page = tradeService.searchBySpecification(spec, pageable);
+
+            Page<TradeDTO> dtoPage = page.map(tradeMapper::toDto);
+
+            return ResponseEntity.ok(dtoPage);
+
+        } catch (DateTimeParseException ex) {
+            return ResponseEntity.badRequest().body("Invalid date format. Use ISO yyyy-MM-dd.");
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body("Invalid RSQL query: " + ex.getMessage());
+        } catch (Exception ex) {
+            logger.error("RSQL search failed: {}", ex.getMessage(), ex);
+            return ResponseEntity.internalServerError().body("Error executing RSQL search.");
+        }
     }
 
     @PostMapping
