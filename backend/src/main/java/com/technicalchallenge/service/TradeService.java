@@ -2,6 +2,7 @@ package com.technicalchallenge.service;
 
 import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.dto.TradeLegDTO;
+import com.technicalchallenge.dto.ValidationResult;
 import com.technicalchallenge.model.*;
 import com.technicalchallenge.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +61,8 @@ public class TradeService {
     private PayRecRepository payRecRepository;
     @Autowired
     private AdditionalInfoService additionalInfoService;
+    @Autowired
+    private TradeValidationService tradeValidationService;
 
     public List<Trade> getAllTrades() {
         logger.info("Retrieving all trades");
@@ -118,6 +121,11 @@ public class TradeService {
     @Transactional
     public Trade createTrade(TradeDTO tradeDTO) {
         logger.info("Creating new trade with ID: {}", tradeDTO.getTradeId());
+
+        ValidationResult validation = tradeValidationService.validateTradeBusinessRules(tradeDTO);
+        if (validation.failed()){
+            throw new IllegalArgumentException(String.join(";", validation.getErrors()));
+        }
 
         // Generate trade ID if not provided
         if (tradeDTO.getTradeId() == null) {
@@ -314,6 +322,11 @@ public class TradeService {
     public Trade amendTrade(Long tradeId, TradeDTO tradeDTO) {
         logger.info("Amending trade with ID: {}", tradeId);
 
+        ValidationResult validation = tradeValidationService.validateTradeBusinessRules(tradeDTO);
+        if(validation.failed()){
+            throw new IllegalArgumentException(String.join(";", validation.getErrors()));
+        }
+        
         Optional<Trade> existingTradeOpt = getTradeById(tradeId);
         if (existingTradeOpt.isEmpty()) {
             throw new RuntimeException("Trade not found: " + tradeId);
