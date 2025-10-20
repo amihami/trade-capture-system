@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import com.technicalchallenge.repository.TradeSpecifications;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -65,6 +69,50 @@ public class TradeService {
     public Optional<Trade> getTradeById(Long tradeId) {
         logger.debug("Retrieving trade by id: {}", tradeId);
         return tradeRepository.findByTradeIdAndActiveTrue(tradeId);
+    }
+
+    @Transactional
+    public Page<Trade> searchTrades(TradeDTO criteria, Pageable pageable) {
+        if (criteria == null) {
+            logger.info("Search criteria is null, returning paginated results without filters.");
+            return tradeRepository.findAll(pageable);
+        }
+
+        String counterparty = criteria.getCounterpartyName();
+        String book = criteria.getBookName();
+        String trader = criteria.getTraderUserName();
+        String status = criteria.getTradeStatus();
+
+        LocalDate dateFrom = criteria.getValidityStartDate();
+        LocalDate dateTo = criteria.getValidityEndDate();
+        if (dateFrom == null && criteria.getTradeDate() != null) {
+            dateFrom = criteria.getTradeDate();
+        }
+        if (dateTo == null && criteria.getTradeDate() != null) {
+            dateTo = criteria.getTradeDate();
+        }
+        logger.info(
+                "Executing trade search, counterparty: {}, book: {}, trader: {}, status: {}, dateFrom: {}, dateTo: {}",
+                counterparty, book, trader, status, dateFrom, dateTo);
+
+        Specification<Trade> spec = TradeSpecifications.build(counterparty, book, trader, status, dateFrom, dateTo);
+
+        Page<Trade> page = tradeRepository.findAll(spec, pageable);
+        logger.info("Trade search returned {} results (page {}/{})",
+                page.getTotalElements(), page.getNumber() + 1, page.getTotalPages());
+
+        return page;
+    }
+
+    @Transactional
+    public Page<Trade> filterTrades(Pageable pageable) {
+        logger.info("Fetching paginated list of all trades");
+        return tradeRepository.findAll(pageable);
+    }
+
+    @Transactional
+    public Page<Trade> searchBySpecification(Specification<Trade> spec, Pageable pageable) {
+        return tradeRepository.findAll(spec, pageable);
     }
 
     @Transactional
@@ -173,7 +221,8 @@ public class TradeService {
                 } else {
                     logger.warn("Trader user not found with firstName: {}", firstName);
                     // Try with loginId as fallback
-                    Optional<ApplicationUser> byLoginId = applicationUserRepository.findByLoginId(tradeDTO.getTraderUserName().toLowerCase());
+                    Optional<ApplicationUser> byLoginId = applicationUserRepository
+                            .findByLoginId(tradeDTO.getTraderUserName().toLowerCase());
                     if (byLoginId.isPresent()) {
                         trade.setTraderUser(byLoginId.get());
                         logger.debug("Found trader user by loginId: {}", tradeDTO.getTraderUserName());
@@ -197,11 +246,13 @@ public class TradeService {
                 Optional<ApplicationUser> userOpt = applicationUserRepository.findByFirstName(firstName);
                 if (userOpt.isPresent()) {
                     trade.setTradeInputterUser(userOpt.get());
-                    logger.debug("Found inputter user: {} {}", userOpt.get().getFirstName(), userOpt.get().getLastName());
+                    logger.debug("Found inputter user: {} {}", userOpt.get().getFirstName(),
+                            userOpt.get().getLastName());
                 } else {
                     logger.warn("Inputter user not found with firstName: {}", firstName);
                     // Try with loginId as fallback
-                    Optional<ApplicationUser> byLoginId = applicationUserRepository.findByLoginId(tradeDTO.getInputterUserName().toLowerCase());
+                    Optional<ApplicationUser> byLoginId = applicationUserRepository
+                            .findByLoginId(tradeDTO.getInputterUserName().toLowerCase());
                     if (byLoginId.isPresent()) {
                         trade.setTradeInputterUser(byLoginId.get());
                         logger.debug("Found inputter user by loginId: {}", tradeDTO.getInputterUserName());
@@ -222,7 +273,8 @@ public class TradeService {
             Optional<TradeType> tradeTypeOpt = tradeTypeRepository.findByTradeType(tradeDTO.getTradeType());
             if (tradeTypeOpt.isPresent()) {
                 trade.setTradeType(tradeTypeOpt.get());
-                logger.debug("Found trade type: {} with ID: {}", tradeTypeOpt.get().getTradeType(), tradeTypeOpt.get().getId());
+                logger.debug("Found trade type: {} with ID: {}", tradeTypeOpt.get().getTradeType(),
+                        tradeTypeOpt.get().getId());
             } else {
                 logger.warn("Trade type not found: {}", tradeDTO.getTradeType());
             }
@@ -232,7 +284,8 @@ public class TradeService {
         }
 
         if (tradeDTO.getTradeSubType() != null) {
-            Optional<TradeSubType> tradeSubTypeOpt = tradeSubTypeRepository.findByTradeSubType(tradeDTO.getTradeSubType());
+            Optional<TradeSubType> tradeSubTypeOpt = tradeSubTypeRepository
+                    .findByTradeSubType(tradeDTO.getTradeSubType());
             if (tradeSubTypeOpt.isPresent()) {
                 trade.setTradeSubType(tradeSubTypeOpt.get());
             } else {
@@ -530,7 +583,8 @@ public class TradeService {
                         throw new RuntimeException("Invalid schedule format: " + schedule);
                     }
                 }
-                throw new RuntimeException("Invalid schedule format: " + schedule + ". Supported formats: Monthly, Quarterly, Semi-annually, Annually, or 1M, 3M, 6M, 12M");
+                throw new RuntimeException("Invalid schedule format: " + schedule
+                        + ". Supported formats: Monthly, Quarterly, Semi-annually, Annually, or 1M, 3M, 6M, 12M");
         }
     }
 
@@ -585,7 +639,8 @@ public class TradeService {
 
     // NEW METHOD: Generate the next trade ID (sequential)
     private Long generateNextTradeId() {
-        // For simplicity, using a static variable. In real scenario, this should be atomic and thread-safe.
+        // For simplicity, using a static variable. In real scenario, this should be
+        // atomic and thread-safe.
         return 10000L + tradeRepository.count();
     }
 }
