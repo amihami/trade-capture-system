@@ -33,7 +33,7 @@ public class DashboardController {
         this.dashboardService = dashboardService;
         this.tradeMapper = tradeMapper;
     }
-
+    
     @GetMapping("/my-trades")
     @Operation(
         summary = "My trades (paginated blotter)",
