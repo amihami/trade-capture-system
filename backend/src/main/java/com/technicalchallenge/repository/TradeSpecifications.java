@@ -6,6 +6,7 @@ import org.springframework.data.jpa.domain.Specification;
 import java.time.LocalDate;
 
 import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Expression;
 
 public final class TradeSpecifications {
@@ -97,5 +98,25 @@ public final class TradeSpecifications {
                 .and(statusEquals(status))
                 .and(tradeDateGte(dateFrom))
                 .and(tradeDateLte(dateTo));
+    }
+
+    public static Specification<Trade> activeTrue() {
+        return (root, query, cb) -> cb.isTrue(root.get("active"));
+    }
+
+    public static Specification<Trade> traderIdEquals(Long traderId) {
+        return (root, query, cb) -> {
+            if (traderId == null)
+                return null;
+            return cb.equal(root.join("traderUser", JoinType.LEFT).get("id"), traderId);
+        };
+    }
+
+    public static Specification<Trade> bookIdEquals(Long bookId) {
+        return (root, query, cb) -> {
+            if (bookId == null)
+                return null;
+            return cb.equal(root.join("book", JoinType.LEFT).get("id"), bookId);
+        };
     }
 }
