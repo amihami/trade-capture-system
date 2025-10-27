@@ -162,10 +162,6 @@ public class TradeControllerTest {
         // Trade date is purposely missing
 
         // When/Then
-        when(tradeService.saveTrade(any(Trade.class), any(TradeDTO.class)))
-                .thenThrow(new IllegalArgumentException("Trade date is required"));
-        when(tradeMapper.toEntity(any(TradeDTO.class))).thenReturn(new Trade());
-
         mockMvc.perform(post("/api/trades")
                 .param("performedBy", "tester")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -173,7 +169,7 @@ public class TradeControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Trade date is required"));
 
-        verify(tradeService).saveTrade(any(Trade.class), any(TradeDTO.class));
+        verify(tradeService, never()).saveTrade(any(Trade.class), any(TradeDTO.class));
     }
 
     @Test
