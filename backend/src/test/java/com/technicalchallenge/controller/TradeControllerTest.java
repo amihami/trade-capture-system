@@ -6,10 +6,13 @@ import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.mapper.TradeMapper;
 import com.technicalchallenge.model.Trade;
 import com.technicalchallenge.service.TradeService;
+import com.technicalchallenge.service.TradeValidationService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
@@ -23,12 +26,14 @@ import java.util.Optional;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(TradeController.class)
+@AutoConfigureMockMvc(addFilters = false)
 public class TradeControllerTest {
 
     @Autowired
@@ -39,6 +44,9 @@ public class TradeControllerTest {
 
     @MockBean
     private TradeMapper tradeMapper;
+
+    @MockBean
+    private TradeValidationService tradeValidationService;
 
     private ObjectMapper objectMapper;
     private TradeDTO tradeDTO;
@@ -75,6 +83,7 @@ public class TradeControllerTest {
         // Set up default mappings
         when(tradeMapper.toDto(any(Trade.class))).thenReturn(tradeDTO);
         when(tradeMapper.toEntity(any(TradeDTO.class))).thenReturn(trade);
+        when(tradeValidationService.validateUserPrivileges(anyString(), anyString(), any())).thenReturn(true);
     }
 
     @Test
@@ -86,7 +95,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(get("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .param("performedBy", "tester")
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].tradeId", is(1001)))
@@ -103,7 +113,7 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(get("/api/trades/1001")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tradeId", is(1001)))
                 .andExpect(jsonPath("$.bookName", is("TestBook")))
@@ -119,7 +129,7 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(get("/api/trades/9999")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
 
         verify(tradeService).getTradeById(9999L);
@@ -133,8 +143,9 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tradeDTO)))
+                .param("performedBy", "tester")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tradeDTO)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tradeId", is(1001)));
 
@@ -152,8 +163,9 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDTO)))
+                .param("performedBy", "tester")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDTO)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Trade date is required"));
 
@@ -170,8 +182,9 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDTO)))
+                .param("performedBy", "tester")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDTO)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Book and Counterparty are required"));
 
@@ -188,8 +201,9 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(put("/api/trades/{id}", tradeId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tradeDTO)))
+                .param("performedBy", "tester")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tradeDTO)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tradeId", is(1001)));
 
@@ -204,8 +218,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(put("/api/trades/{id}", pathId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tradeDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tradeDTO)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Trade ID in path must match Trade ID in request body"));
 
@@ -219,7 +233,7 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(delete("/api/trades/1001")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNoContent());
 
         verify(tradeService).deleteTrade(1001L);
@@ -234,8 +248,9 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDTO)))
+                .param("performedBy", "tester")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDTO)))
                 .andExpect(status().isBadRequest());
 
         verify(tradeService, never()).createTrade(any(TradeDTO.class));
