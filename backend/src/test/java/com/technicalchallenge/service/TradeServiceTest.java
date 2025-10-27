@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.technicalchallenge.dto.ValidationResult;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -59,6 +60,9 @@ class TradeServiceTest {
     @Mock
     private ScheduleRepository scheduleRepository;
 
+    @Mock
+    private TradeValidationService tradeValidationService;
+
     @InjectMocks
     private TradeService tradeService;
 
@@ -89,6 +93,11 @@ class TradeServiceTest {
         trade = new Trade();
         trade.setId(1L);
         trade.setTradeId(100001L);
+
+        when(tradeValidationService.validateTradeBusinessRules(any()))
+                .thenReturn(ValidationResult.ok());
+        when(tradeValidationService.validateUserPrivileges(any(), any(), any()))
+                .thenReturn(true);
     }
 
     @Test
