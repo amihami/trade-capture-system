@@ -3,9 +3,12 @@ package com.technicalchallenge.controller;
 import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.mapper.TradeMapper;
 import com.technicalchallenge.model.Trade;
-import com.technicalchallenge.repository.RsqlSpecificationBuilder;
+import com.technicalchallenge.repository.RsqlBuilder;
 import com.technicalchallenge.service.TradeService;
 import com.technicalchallenge.service.TradeValidationService;
+
+import cz.jirutka.rsql.parser.ParseException;
+import cz.jirutka.rsql.parser.RSQLParserException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
@@ -137,8 +140,7 @@ public class TradeController {
                 return ResponseEntity.badRequest().body("Query must not be blank.");
             }
 
-            Specification<Trade> spec = RsqlSpecificationBuilder.from(rsql);
-
+            Specification<Trade> spec = RsqlBuilder.from(rsql);
             Page<Trade> page = tradeService.searchBySpecification(spec, pageable);
 
             Page<TradeDTO> dtoPage = page.map(tradeMapper::toDto);
@@ -147,6 +149,8 @@ public class TradeController {
 
         } catch (DateTimeParseException ex) {
             return ResponseEntity.badRequest().body("Invalid date format. Use ISO yyyy-MM-dd.");
+        } catch (RSQLParserException ex) {
+            return ResponseEntity.badRequest().body("Invalid RSQL syntax: " + ex.getMessage());
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("Invalid RSQL query: " + ex.getMessage());
         } catch (Exception ex) {
