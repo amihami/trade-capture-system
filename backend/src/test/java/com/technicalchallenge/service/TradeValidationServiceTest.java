@@ -29,6 +29,29 @@ public class TradeValidationServiceTest {
     @InjectMocks
     private TradeValidationService validationService;
 
+    private ApplicationUser activeUserWithRole(String role) {
+        ApplicationUser user = new ApplicationUser();
+        user.setActive(true);
+        user.setLoginId(role);
+        UserProfile profile = new UserProfile();
+
+        switch (role.toLowerCase()) {
+            case "trader" -> profile.setUserType("TRADER");
+            case "sales" -> profile.setUserType("SALES");
+            case "middle_office" -> profile.setUserType("MIDDLE_OFFICE");
+            case "support" -> profile.setUserType("SUPPORT");
+            default -> profile.setUserType("TRADER");
+        }
+        user.setUserProfile(profile);
+        return user;
+    }
+
+    private ApplicationUser inactiveUserWithRole(String role) {
+        ApplicationUser user = activeUserWithRole(role);
+        user.setActive(false);
+        return user;
+    }
+
     @Test
     void validateTradeBusinessRules_dateOrderingErrors() {
         TradeDTO dto = new TradeDTO();
@@ -91,4 +114,132 @@ public class TradeValidationServiceTest {
         assertTrue(result.getErrors().stream().anyMatch(m -> m.toLowerCase().contains("counterparty must")));
     }
 
+        @Test
+    void validateTradeBusinessRules_tradeDateTooOld() {
+        TradeDTO dto = new TradeDTO();
+        dto.setTradeDate(LocalDate.now().minusDays(31)); 
+
+        ValidationResult result = validationService.validateTradeBusinessRules(dto);
+        assertTrue(result.failed());
+        assertTrue(result.getErrors().stream()
+                .anyMatch(m -> m.toLowerCase().contains("more than 30 days")));
+    }
+
+    @Test
+    void validateTradeBusinessRules_floatingLegRequiresIndex() {
+        TradeDTO dto = new TradeDTO();
+        dto.setTradeDate(LocalDate.now());
+        dto.setTradeStartDate(LocalDate.now().plusDays(1));
+        dto.setTradeMaturityDate(LocalDate.now().plusDays(90));
+
+        TradeLegDTO floating = new TradeLegDTO();
+        floating.setLegType("Floating");
+        floating.setPayReceiveFlag("Pay");
+        floating.setNotional(BigDecimal.valueOf(1_000_000));
+
+        TradeLegDTO fixed = new TradeLegDTO();
+        fixed.setLegType("Fixed");
+        fixed.setPayReceiveFlag("Receive");
+        fixed.setNotional(BigDecimal.valueOf(1_000_000));
+        fixed.setRate(0.02);
+
+        dto.setTradeLegs(java.util.List.of(floating, fixed));
+
+        ValidationResult result = validationService.validateTradeBusinessRules(dto);
+        assertTrue(result.failed());
+        assertTrue(result.getErrors().stream()
+                .anyMatch(m -> m.toLowerCase().contains("floating") && m.toLowerCase().contains("index")));
+    }
+
+    @Test
+    void validateTradeBusinessRules_fixedLegRequiresRate() {
+        TradeDTO dto = new TradeDTO();
+        dto.setTradeDate(LocalDate.now());
+        dto.setTradeStartDate(LocalDate.now().plusDays(1));
+        dto.setTradeMaturityDate(LocalDate.now().plusDays(90));
+
+        TradeLegDTO fixed = new TradeLegDTO();
+        fixed.setLegType("Fixed");
+        fixed.setPayReceiveFlag("Pay");
+        fixed.setNotional(BigDecimal.valueOf(1_000_000));
+
+        TradeLegDTO floating = new TradeLegDTO();
+        floating.setLegType("Floating");
+        floating.setPayReceiveFlag("Receive");
+        floating.setNotional(BigDecimal.valueOf(1_000_000));
+        floating.setIndexName("LIBOR-3M");
+
+        dto.setTradeLegs(java.util.List.of(fixed, floating));
+
+        ValidationResult result = validationService.validateTradeBusinessRules(dto);
+        assertTrue(result.failed());
+        assertTrue(result.getErrors().stream()
+                .anyMatch(m -> m.toLowerCase().contains("fixed") && m.toLowerCase().contains("rate")));
+    }
+
+    @Test
+    void validateUserPrivileges_trader_allCoreOpsAllowed() {
+        ApplicationUser user = activeUserWithRole("trader");
+        when(applicationUserRepository.findByLoginId("trader")).thenReturn(Optional.of(user));
+
+        assertTrue(validationService.validateUserPrivileges("trader", TradeValidationService.OPERATION_CREATE, null));
+        assertTrue(validationService.validateUserPrivileges("trader", TradeValidationService.OPERATION_AMEND, null));
+        assertTrue(validationService.validateUserPrivileges("trader", TradeValidationService.OPERATION_TERMINATE, null));
+        assertTrue(validationService.validateUserPrivileges("trader", TradeValidationService.OPERATION_CANCEL, null));
+        assertTrue(validationService.validateUserPrivileges("trader", TradeValidationService.OPERATION_VIEW, null));
+    }
+
+    @Test
+    void validateUserPrivileges_sales_noTerminateOrCancel() {
+        ApplicationUser user = activeUserWithRole("sales");
+        when(applicationUserRepository.findByLoginId("sales")).thenReturn(Optional.of(user));
+
+        assertTrue(validationService.validateUserPrivileges("sales", TradeValidationService.OPERATION_CREATE, null));
+        assertTrue(validationService.validateUserPrivileges("sales", TradeValidationService.OPERATION_AMEND, null));
+        assertTrue(validationService.validateUserPrivileges("sales", TradeValidationService.OPERATION_VIEW, null));
+
+        assertFalse(validationService.validateUserPrivileges("sales", TradeValidationService.OPERATION_TERMINATE, null));
+        assertFalse(validationService.validateUserPrivileges("sales", TradeValidationService.OPERATION_CANCEL, null));
+    }
+
+    @Test
+    void validateUserPrivileges_middleOffice_amendAndViewOnly() {
+        ApplicationUser user = activeUserWithRole("middle_office");
+        when(applicationUserRepository.findByLoginId("mo")).thenReturn(Optional.of(user));
+
+        assertTrue(validationService.validateUserPrivileges("mo", TradeValidationService.OPERATION_AMEND, null));
+        assertTrue(validationService.validateUserPrivileges("mo", TradeValidationService.OPERATION_VIEW, null));
+
+        assertFalse(validationService.validateUserPrivileges("mo", TradeValidationService.OPERATION_CREATE, null));
+        assertFalse(validationService.validateUserPrivileges("mo", TradeValidationService.OPERATION_TERMINATE, null));
+        assertFalse(validationService.validateUserPrivileges("mo", TradeValidationService.OPERATION_CANCEL, null));
+    }
+
+    @Test
+    void validateUserPrivileges_support_viewOnly() {
+        ApplicationUser user = activeUserWithRole("support");
+        when(applicationUserRepository.findByLoginId("support")).thenReturn(Optional.of(user));
+
+        assertTrue(validationService.validateUserPrivileges("support", TradeValidationService.OPERATION_VIEW, null));
+        assertFalse(validationService.validateUserPrivileges("support", TradeValidationService.OPERATION_CREATE, null));
+        assertFalse(validationService.validateUserPrivileges("support", TradeValidationService.OPERATION_AMEND, null));
+        assertFalse(validationService.validateUserPrivileges("support", TradeValidationService.OPERATION_TERMINATE, null));
+        assertFalse(validationService.validateUserPrivileges("support", TradeValidationService.OPERATION_CANCEL, null));
+    }
+
+    @Test
+    void validateUserPrivileges_inactiveUser_denied() {
+        ApplicationUser user = inactiveUserWithRole("trader");
+        when(applicationUserRepository.findByLoginId("inactive")).thenReturn(Optional.of(user));
+
+        assertFalse(validationService.validateUserPrivileges("inactive", TradeValidationService.OPERATION_CREATE, null));
+    }
+
+    @Test
+    void validateUserPrivileges_unknownUser_denied() {
+        when(applicationUserRepository.findByLoginId("unknown")).thenReturn(Optional.empty());
+        assertFalse(validationService.validateUserPrivileges("unknown", TradeValidationService.OPERATION_VIEW, null));
+    }
+
+    
 }
