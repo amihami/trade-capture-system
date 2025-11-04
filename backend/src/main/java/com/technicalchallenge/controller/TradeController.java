@@ -147,8 +147,6 @@ public class TradeController {
 
             return ResponseEntity.ok(dtoPage);
 
-        } catch (DateTimeParseException ex) {
-            return ResponseEntity.badRequest().body("Invalid date format. Use ISO yyyy-MM-dd.");
         } catch (RSQLParserException ex) {
             return ResponseEntity.badRequest().body("Invalid RSQL syntax: " + ex.getMessage());
         } catch (IllegalArgumentException ex) {
