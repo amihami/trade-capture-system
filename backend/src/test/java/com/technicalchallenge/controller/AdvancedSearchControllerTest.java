@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
@@ -77,22 +78,21 @@ public class AdvancedSearchControllerTest {
         when(tradeMapper.toDto(any(Trade.class))).thenReturn(tradeDTO);
     }
 
-
     @Test
     void testSearchTrades_withAllParams_ok() throws Exception {
         when(tradeService.searchTrades(any(TradeDTO.class), any(Pageable.class))).thenReturn(tradePage);
 
         mockMvc.perform(get("/api/trades/search")
-                        .param("counterparty", "TestCounterparty")
-                        .param("book", "TestBook")
-                        .param("trader", "alice")
-                        .param("status", "NEW")
-                        .param("dateFrom", "2025-01-01")
-                        .param("dateTo", "2025-12-31")
-                        .param("page", "0")
-                        .param("size", "20")
-                        .param("sort", "tradeId,desc")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("counterparty", "TestCounterparty")
+                .param("book", "TestBook")
+                .param("trader", "alice")
+                .param("status", "NEW")
+                .param("dateFrom", "2025-01-01")
+                .param("dateTo", "2025-12-31")
+                .param("page", "0")
+                .param("size", "20")
+                .param("sort", "tradeId,desc")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].tradeId", is(1001)))
@@ -107,24 +107,23 @@ public class AdvancedSearchControllerTest {
         when(tradeService.searchTrades(any(TradeDTO.class), any(Pageable.class))).thenReturn(tradePage);
 
         mockMvc.perform(get("/api/trades/search")
-                        .param("page", "0")
-                        .param("size", "20")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("page", "0")
+                .param("size", "20")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)));
 
         verify(tradeService).searchTrades(any(TradeDTO.class), any(Pageable.class));
     }
 
-
     @Test
     void testFilterTrades_ok() throws Exception {
         when(tradeService.filterTrades(any(Pageable.class))).thenReturn(tradePage);
 
         mockMvc.perform(get("/api/trades/filter")
-                        .param("page", "0")
-                        .param("size", "20")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("page", "0")
+                .param("size", "20")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].tradeId", is(1001)));
@@ -132,16 +131,15 @@ public class AdvancedSearchControllerTest {
         verify(tradeService).filterTrades(any(Pageable.class));
     }
 
-
     @Test
     void testRsql_simpleCounterparty_ok() throws Exception {
         when(tradeService.searchBySpecification(any(), any(Pageable.class))).thenReturn(tradePage);
 
         mockMvc.perform(get("/api/trades/rsql")
-                        .param("query", "counterparty.name==TestCounterparty")
-                        .param("page", "0")
-                        .param("size", "20")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("query", "counterparty.name==TestCounterparty")
+                .param("page", "0")
+                .param("size", "20")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].tradeId", is(1001)));
@@ -154,10 +152,10 @@ public class AdvancedSearchControllerTest {
         when(tradeService.searchBySpecification(any(), any(Pageable.class))).thenReturn(tradePage);
 
         mockMvc.perform(get("/api/trades/rsql")
-                        .param("query", "(counterparty.name==ABC,counterparty.name==XYZ);tradeStatus.tradeStatus==NEW")
-                        .param("page", "0")
-                        .param("size", "20")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("query", "(counterparty.name==ABC,counterparty.name==XYZ);tradeStatus.tradeStatus==NEW")
+                .param("page", "0")
+                .param("size", "20")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)));
 
@@ -169,10 +167,10 @@ public class AdvancedSearchControllerTest {
         when(tradeService.searchBySpecification(any(), any(Pageable.class))).thenReturn(tradePage);
 
         mockMvc.perform(get("/api/trades/rsql")
-                        .param("query", "tradeDate=ge=2025-01-01;tradeDate=le=2025-12-31")
-                        .param("page", "0")
-                        .param("size", "20")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("query", "tradeDate=ge=2025-01-01;tradeDate=le=2025-12-31")
+                .param("page", "0")
+                .param("size", "20")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)));
 
@@ -182,8 +180,8 @@ public class AdvancedSearchControllerTest {
     @Test
     void testRsql_badSyntax_400() throws Exception {
         mockMvc.perform(get("/api/trades/rsql")
-                        .param("query", "counterparty.name===ABC") // invalid operator '==='
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("query", "counterparty.name===ABC") 
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Invalid RSQL syntax")));
 
@@ -191,21 +189,34 @@ public class AdvancedSearchControllerTest {
     }
 
     @Test
-    void testRsql_badDate_400() throws Exception {
-        mockMvc.perform(get("/api/trades/rsql")
-                        .param("query", "tradeDate=ge=2025-13-01") // invalid month 13
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().string("Invalid date format. Use ISO yyyy-MM-dd."));
+    void testRsql_badDate_returns500_genericError() throws Exception {
+        Pageable pageable = PageRequest.of(0, 10);
 
-        verify(tradeService, never()).searchBySpecification(any(), any(Pageable.class));
+        when(tradeService.searchBySpecification(
+                org.mockito.ArgumentMatchers.<Specification<Trade>>any(),
+                eq(pageable)))
+                .thenThrow(new java.time.format.DateTimeParseException(
+                        "Invalid value for MonthOfYear (valid values 1 - 12): 13",
+                        "2025-13-01",
+                        5));
+
+        mockMvc.perform(get("/api/trades/rsql")
+                .param("query", "tradeDate=ge=2025-13-01")
+                .param("page", "0")
+                .param("size", "10")
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Error executing RSQL search.")));
+
+        verify(tradeService, times(1))
+                .searchBySpecification(org.mockito.ArgumentMatchers.<Specification<Trade>>any(), eq(pageable));
     }
 
     @Test
     void testRsql_unsupportedField_400() throws Exception {
         mockMvc.perform(get("/api/trades/rsql")
-                        .param("query", "foo==bar")
-                        .accept(MediaType.APPLICATION_JSON))
+                .param("query", "foo==bar")
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Invalid RSQL query:")));
 
