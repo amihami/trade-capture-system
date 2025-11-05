@@ -13,9 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import com.technicalchallenge.repository.TradeSpecifications;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -123,7 +123,7 @@ public class TradeService {
         logger.info("Creating new trade with ID: {}", tradeDTO.getTradeId());
 
         ValidationResult validation = tradeValidationService.validateTradeBusinessRules(tradeDTO);
-        if (validation.failed()){
+        if (validation.failed()) {
             throw new IllegalArgumentException(String.join(";", validation.getErrors()));
         }
 
@@ -323,10 +323,10 @@ public class TradeService {
         logger.info("Amending trade with ID: {}", tradeId);
 
         ValidationResult validation = tradeValidationService.validateTradeBusinessRules(tradeDTO);
-        if(validation.failed()){
+        if (validation.failed()) {
             throw new IllegalArgumentException(String.join(";", validation.getErrors()));
         }
-        
+
         Optional<Trade> existingTradeOpt = getTradeById(tradeId);
         if (existingTradeOpt.isEmpty()) {
             throw new RuntimeException("Trade not found: " + tradeId);
@@ -614,29 +614,54 @@ public class TradeService {
     }
 
     private BigDecimal calculateCashflowValue(TradeLeg leg, int monthsInterval) {
+        System.out.println("calculateCashflowValue: monthsInterval=" + monthsInterval
+                + ", legRateType=" + (leg.getLegRateType() == null ? "null" : leg.getLegRateType().getType()));
+
         if (leg.getLegRateType() == null) {
+            System.out.println("calculateCashflowValue: legRateType is null → returning 0");
             return BigDecimal.ZERO;
         }
 
         String legType = leg.getLegRateType().getType();
 
         if ("Fixed".equals(legType)) {
-            double notional = leg.getNotional().doubleValue();
-            double rate = leg.getRate();
-            double months = monthsInterval;
+            BigDecimal notional = (leg.getNotional() == null) ? BigDecimal.ZERO : leg.getNotional();
+            BigDecimal rawRate = (leg.getRate() == null) ? BigDecimal.ZERO : BigDecimal.valueOf(leg.getRate());
+            BigDecimal months = new BigDecimal(monthsInterval);
 
-            double result = (notional * rate * months) / 12;
+        BigDecimal rateDecimal = rawRate.divide(BigDecimal.valueOf(100), 12, RoundingMode.HALF_EVEN);
 
-            return BigDecimal.valueOf(result);
+        System.out.println("calculateCashflowValue[Fixed] normalized rate (decimal, percent input/100): " + rateDecimal);
+
+
+            System.out.println("calculateCashflowValue[Fixed] normalized rate (decimal): " + rateDecimal);
+
+            BigDecimal periodFraction = months.divide(BigDecimal.valueOf(12), 12, RoundingMode.HALF_EVEN); 
+                                                                                                           
+            BigDecimal result = notional
+                    .multiply(rateDecimal)
+                    .multiply(periodFraction)
+                    .setScale(2, RoundingMode.HALF_EVEN); 
+
+            System.out.println("calculateCashflowValue[Fixed] inputs: notional=" + notional
+                    + ", rate(raw)=" + rawRate
+                    + ", rate(decimal)=" + rateDecimal
+                    + ", months=" + months
+                    + ", periodFraction=" + periodFraction);
+            System.out.println("calculateCashflowValue[Fixed] result (BigDecimal)=" + result);
+
+            return result; 
+
         } else if ("Floating".equals(legType)) {
+            System.out.println("calculateCashflowValue[Floating]: returning 0");
             return BigDecimal.ZERO;
         }
 
+        System.out.println("calculateCashflowValue: unknown legType='" + legType + "' → returning 0");
         return BigDecimal.ZERO;
     }
 
     private void validateReferenceData(Trade trade) {
-        // Validate essential reference data is populated
         if (trade.getBook() == null) {
             throw new RuntimeException("Book not found or not set");
         }
@@ -650,10 +675,7 @@ public class TradeService {
         logger.debug("Reference data validation passed for trade");
     }
 
-    // NEW METHOD: Generate the next trade ID (sequential)
     private Long generateNextTradeId() {
-        // For simplicity, using a static variable. In real scenario, this should be
-        // atomic and thread-safe.
         return 10000L + tradeRepository.count();
     }
 }
