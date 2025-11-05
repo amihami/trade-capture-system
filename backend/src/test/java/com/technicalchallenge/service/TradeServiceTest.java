@@ -8,6 +8,7 @@ import com.technicalchallenge.model.TradeStatus;
 import com.technicalchallenge.model.Book;
 import com.technicalchallenge.model.Cashflow;
 import com.technicalchallenge.model.Counterparty;
+import com.technicalchallenge.model.LegType;
 import com.technicalchallenge.model.Schedule;
 import com.technicalchallenge.repository.CashflowRepository;
 import com.technicalchallenge.repository.TradeLegRepository;
@@ -32,9 +33,10 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
-class TradeServiceTest {
+public class TradeServiceTest {
 
     @Mock
     private TradeRepository tradeRepository;
@@ -224,24 +226,24 @@ class TradeServiceTest {
     @Test
     void testCashflowGeneration_MonthlySchedule() {
         LocalDate tradeDate = LocalDate.of(2025, 1, 1);
-        LocalDate starDate = tradeDate;
-        LocalDate maturityDate = starDate.plusMonths(1);
+        LocalDate startDate = tradeDate;
+        LocalDate maturityDate = startDate.plusMonths(1);
 
         TradeDTO dto = new TradeDTO();
         dto.setTradeDate(tradeDate);
-        dto.setTradeStartDate(starDate);
+        dto.setTradeStartDate(startDate);
         dto.setTradeMaturityDate(maturityDate);
         dto.setBookName("TestBook");
         dto.setCounterpartyName("TestCounterparty");
 
         TradeLegDTO legMonthly = new TradeLegDTO();
         legMonthly.setNotional(BigDecimal.valueOf(1_000_000));
-        legMonthly.setRate(0.05);
+        legMonthly.setRate(5.0); // percent input
         legMonthly.setCalculationPeriodSchedule("1M");
 
         TradeLegDTO legDefaultQuarterly = new TradeLegDTO();
         legDefaultQuarterly.setNotional(BigDecimal.valueOf(1_000_000));
-        legDefaultQuarterly.setRate(0.05);
+        legDefaultQuarterly.setRate(5.0); // percent input
         legDefaultQuarterly.setCalculationPeriodSchedule(null);
 
         dto.setTradeLegs(java.util.List.of(legMonthly, legDefaultQuarterly));
@@ -255,12 +257,77 @@ class TradeServiceTest {
         when(scheduleRepository.findBySchedule("1M")).thenReturn(Optional.of(schedule));
 
         when(tradeRepository.save(any(Trade.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> {
+            TradeLeg leg = inv.getArgument(0);
+            LegType fixed = new LegType();
+            fixed.setType("Fixed");
+            leg.setLegRateType(fixed);
+            return leg;
+        });
+
+        when(cashflowRepository.save(any(Cashflow.class))).thenAnswer(inv -> inv.getArgument(0));
 
         when(tradeValidationService.validateTradeBusinessRules(any()))
                 .thenReturn(ValidationResult.ok());
+
         tradeService.createTrade(dto);
 
         verify(cashflowRepository, times(1)).save(any(Cashflow.class));
+    }
+
+    @Test
+    void testCashflowGeneration_QuarterlySchedule() {
+        LocalDate tradeDate = LocalDate.of(2025, 1, 1);
+        LocalDate startDate = tradeDate;
+        LocalDate maturityDate = startDate.plusMonths(3);
+
+        TradeDTO dto = new TradeDTO();
+        dto.setTradeDate(tradeDate);
+        dto.setTradeStartDate(startDate);
+        dto.setTradeMaturityDate(maturityDate);
+        dto.setBookName("TestBook");
+        dto.setCounterpartyName("TestCounterparty");
+
+        TradeLegDTO fixedQuarterly = new TradeLegDTO();
+        fixedQuarterly.setNotional(BigDecimal.valueOf(10_000_000));
+        fixedQuarterly.setRate(3.5); // percent input
+        fixedQuarterly.setCalculationPeriodSchedule(null); // default quarterly
+
+        TradeLegDTO dummy = new TradeLegDTO();
+        dummy.setNotional(BigDecimal.ZERO);
+        dummy.setRate(0.00);
+        dummy.setCalculationPeriodSchedule(null);
+
+        dto.setTradeLegs(java.util.List.of(fixedQuarterly, dummy));
+
+        when(bookRepository.findByBookName("TestBook")).thenReturn(Optional.of(new Book()));
+        when(counterpartyRepository.findByName("TestCounterparty")).thenReturn(Optional.of(new Counterparty()));
+        when(tradeStatusRepository.findByTradeStatus("NEW")).thenReturn(Optional.of(new TradeStatus()));
+        when(tradeRepository.save(any(Trade.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> {
+            TradeLeg leg = inv.getArgument(0);
+            com.technicalchallenge.model.LegType lt = new com.technicalchallenge.model.LegType();
+            if (leg.getNotional() != null && leg.getNotional().compareTo(BigDecimal.ZERO) > 0) {
+                lt.setType("Fixed");
+            } else {
+                lt.setType("Floating");
+            }
+            leg.setLegRateType(lt);
+            if (leg.getLegId() == null) {
+                leg.setLegId(System.nanoTime());
+            }
+            return leg;
+        });
+
+        when(cashflowRepository.save(any(Cashflow.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        when(tradeValidationService.validateTradeBusinessRules(any()))
+                .thenReturn(ValidationResult.ok());
+
+        tradeService.createTrade(dto);
+
+        verify(cashflowRepository, times(2)).save(any(Cashflow.class));
     }
 }

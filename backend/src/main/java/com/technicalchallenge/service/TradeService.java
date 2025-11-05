@@ -13,9 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import com.technicalchallenge.repository.TradeSpecifications;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -123,7 +123,7 @@ public class TradeService {
         logger.info("Creating new trade with ID: {}", tradeDTO.getTradeId());
 
         ValidationResult validation = tradeValidationService.validateTradeBusinessRules(tradeDTO);
-        if (validation.failed()){
+        if (validation.failed()) {
             throw new IllegalArgumentException(String.join(";", validation.getErrors()));
         }
 
@@ -323,10 +323,10 @@ public class TradeService {
         logger.info("Amending trade with ID: {}", tradeId);
 
         ValidationResult validation = tradeValidationService.validateTradeBusinessRules(tradeDTO);
-        if(validation.failed()){
+        if (validation.failed()) {
             throw new IllegalArgumentException(String.join(";", validation.getErrors()));
         }
-        
+
         Optional<Trade> existingTradeOpt = getTradeById(tradeId);
         if (existingTradeOpt.isEmpty()) {
             throw new RuntimeException("Trade not found: " + tradeId);
@@ -619,24 +619,24 @@ public class TradeService {
         }
 
         String legType = leg.getLegRateType().getType();
-
-        if ("Fixed".equals(legType)) {
-            double notional = leg.getNotional().doubleValue();
-            double rate = leg.getRate();
-            double months = monthsInterval;
-
-            double result = (notional * rate * months) / 12;
-
-            return BigDecimal.valueOf(result);
-        } else if ("Floating".equals(legType)) {
+        if (!"Fixed".equals(legType)) {
             return BigDecimal.ZERO;
         }
 
-        return BigDecimal.ZERO;
+        BigDecimal notional = leg.getNotional() != null ? leg.getNotional() : BigDecimal.ZERO;
+        BigDecimal rawRate = leg.getRate() != null ? BigDecimal.valueOf(leg.getRate()) : BigDecimal.ZERO;
+        BigDecimal months = new BigDecimal(monthsInterval);
+
+        BigDecimal rateDecimal = rawRate.divide(BigDecimal.valueOf(100), 12, RoundingMode.HALF_EVEN);
+        BigDecimal periodFraction = months.divide(BigDecimal.valueOf(12), 12, RoundingMode.HALF_EVEN);
+
+        return notional
+                .multiply(rateDecimal)
+                .multiply(periodFraction)
+                .setScale(2, RoundingMode.HALF_EVEN);
     }
 
     private void validateReferenceData(Trade trade) {
-        // Validate essential reference data is populated
         if (trade.getBook() == null) {
             throw new RuntimeException("Book not found or not set");
         }
@@ -650,10 +650,7 @@ public class TradeService {
         logger.debug("Reference data validation passed for trade");
     }
 
-    // NEW METHOD: Generate the next trade ID (sequential)
     private Long generateNextTradeId() {
-        // For simplicity, using a static variable. In real scenario, this should be
-        // atomic and thread-safe.
         return 10000L + tradeRepository.count();
     }
 }
