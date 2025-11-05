@@ -238,12 +238,12 @@ public class TradeServiceTest {
 
         TradeLegDTO legMonthly = new TradeLegDTO();
         legMonthly.setNotional(BigDecimal.valueOf(1_000_000));
-        legMonthly.setRate(5.0); 
+        legMonthly.setRate(5.0); // percent input
         legMonthly.setCalculationPeriodSchedule("1M");
 
         TradeLegDTO legDefaultQuarterly = new TradeLegDTO();
         legDefaultQuarterly.setNotional(BigDecimal.valueOf(1_000_000));
-        legDefaultQuarterly.setRate(5.0); 
+        legDefaultQuarterly.setRate(5.0); // percent input
         legDefaultQuarterly.setCalculationPeriodSchedule(null);
 
         dto.setTradeLegs(java.util.List.of(legMonthly, legDefaultQuarterly));
@@ -260,29 +260,20 @@ public class TradeServiceTest {
 
         when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> {
             TradeLeg leg = inv.getArgument(0);
-
             LegType fixed = new LegType();
             fixed.setType("Fixed");
             leg.setLegRateType(fixed);
-
             return leg;
         });
 
-        when(cashflowRepository.save(any(Cashflow.class))).thenAnswer(inv -> {
-            Object cf = inv.getArgument(0);
-            System.out.println("TEST: cashflowRepository.save(...) called with → " + cf);
-            return cf;
-        });
+        when(cashflowRepository.save(any(Cashflow.class))).thenAnswer(inv -> inv.getArgument(0));
 
         when(tradeValidationService.validateTradeBusinessRules(any()))
                 .thenReturn(ValidationResult.ok());
 
         tradeService.createTrade(dto);
 
-        ArgumentCaptor<Cashflow> captor = ArgumentCaptor.forClass(Cashflow.class);
-        verify(cashflowRepository, times(1)).save(captor.capture()); 
-        Cashflow saved = captor.getValue();
-        System.out.println("TEST: captured saved Cashflow → " + saved);
+        verify(cashflowRepository, times(1)).save(any(Cashflow.class));
     }
 
     @Test
@@ -298,11 +289,10 @@ public class TradeServiceTest {
         dto.setBookName("TestBook");
         dto.setCounterpartyName("TestCounterparty");
 
-      
         TradeLegDTO fixedQuarterly = new TradeLegDTO();
         fixedQuarterly.setNotional(BigDecimal.valueOf(10_000_000));
-        fixedQuarterly.setRate(3.5); 
-        fixedQuarterly.setCalculationPeriodSchedule(null); 
+        fixedQuarterly.setRate(3.5); // percent input
+        fixedQuarterly.setCalculationPeriodSchedule(null); // default quarterly
 
         TradeLegDTO dummy = new TradeLegDTO();
         dummy.setNotional(BigDecimal.ZERO);
@@ -318,7 +308,6 @@ public class TradeServiceTest {
 
         when(tradeLegRepository.save(any(TradeLeg.class))).thenAnswer(inv -> {
             TradeLeg leg = inv.getArgument(0);
-
             com.technicalchallenge.model.LegType lt = new com.technicalchallenge.model.LegType();
             if (leg.getNotional() != null && leg.getNotional().compareTo(BigDecimal.ZERO) > 0) {
                 lt.setType("Fixed");
@@ -326,29 +315,19 @@ public class TradeServiceTest {
                 lt.setType("Floating");
             }
             leg.setLegRateType(lt);
-
             if (leg.getLegId() == null) {
                 leg.setLegId(System.nanoTime());
             }
             return leg;
         });
 
-        when(cashflowRepository.save(any(Cashflow.class))).thenAnswer(inv -> {
-            Object cf = inv.getArgument(0);
-            System.out.println("TEST(QTR): cashflowRepository.save(...) → " + cf);
-            return cf;
-        });
+        when(cashflowRepository.save(any(Cashflow.class))).thenAnswer(inv -> inv.getArgument(0));
 
         when(tradeValidationService.validateTradeBusinessRules(any()))
                 .thenReturn(ValidationResult.ok());
 
         tradeService.createTrade(dto);
 
-        ArgumentCaptor<Cashflow> captor = ArgumentCaptor.forClass(Cashflow.class);
-        verify(cashflowRepository, times(2)).save(captor.capture());
-
-        java.util.List<Cashflow> savedAll = captor.getAllValues();
-        System.out.println("TEST(QTR): save[0] → " + savedAll.get(0));
-        System.out.println("TEST(QTR): save[1] → " + savedAll.get(1));
+        verify(cashflowRepository, times(2)).save(any(Cashflow.class));
     }
 }

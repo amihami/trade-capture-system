@@ -614,51 +614,26 @@ public class TradeService {
     }
 
     private BigDecimal calculateCashflowValue(TradeLeg leg, int monthsInterval) {
-        System.out.println("calculateCashflowValue: monthsInterval=" + monthsInterval
-                + ", legRateType=" + (leg.getLegRateType() == null ? "null" : leg.getLegRateType().getType()));
-
         if (leg.getLegRateType() == null) {
-            System.out.println("calculateCashflowValue: legRateType is null → returning 0");
             return BigDecimal.ZERO;
         }
 
         String legType = leg.getLegRateType().getType();
-
-        if ("Fixed".equals(legType)) {
-            BigDecimal notional = (leg.getNotional() == null) ? BigDecimal.ZERO : leg.getNotional();
-            BigDecimal rawRate = (leg.getRate() == null) ? BigDecimal.ZERO : BigDecimal.valueOf(leg.getRate());
-            BigDecimal months = new BigDecimal(monthsInterval);
-
-        BigDecimal rateDecimal = rawRate.divide(BigDecimal.valueOf(100), 12, RoundingMode.HALF_EVEN);
-
-        System.out.println("calculateCashflowValue[Fixed] normalized rate (decimal, percent input/100): " + rateDecimal);
-
-
-            System.out.println("calculateCashflowValue[Fixed] normalized rate (decimal): " + rateDecimal);
-
-            BigDecimal periodFraction = months.divide(BigDecimal.valueOf(12), 12, RoundingMode.HALF_EVEN); 
-                                                                                                           
-            BigDecimal result = notional
-                    .multiply(rateDecimal)
-                    .multiply(periodFraction)
-                    .setScale(2, RoundingMode.HALF_EVEN); 
-
-            System.out.println("calculateCashflowValue[Fixed] inputs: notional=" + notional
-                    + ", rate(raw)=" + rawRate
-                    + ", rate(decimal)=" + rateDecimal
-                    + ", months=" + months
-                    + ", periodFraction=" + periodFraction);
-            System.out.println("calculateCashflowValue[Fixed] result (BigDecimal)=" + result);
-
-            return result; 
-
-        } else if ("Floating".equals(legType)) {
-            System.out.println("calculateCashflowValue[Floating]: returning 0");
+        if (!"Fixed".equals(legType)) {
             return BigDecimal.ZERO;
         }
 
-        System.out.println("calculateCashflowValue: unknown legType='" + legType + "' → returning 0");
-        return BigDecimal.ZERO;
+        BigDecimal notional = leg.getNotional() != null ? leg.getNotional() : BigDecimal.ZERO;
+        BigDecimal rawRate = leg.getRate() != null ? BigDecimal.valueOf(leg.getRate()) : BigDecimal.ZERO;
+        BigDecimal months = new BigDecimal(monthsInterval);
+
+        BigDecimal rateDecimal = rawRate.divide(BigDecimal.valueOf(100), 12, RoundingMode.HALF_EVEN);
+        BigDecimal periodFraction = months.divide(BigDecimal.valueOf(12), 12, RoundingMode.HALF_EVEN);
+
+        return notional
+                .multiply(rateDecimal)
+                .multiply(periodFraction)
+                .setScale(2, RoundingMode.HALF_EVEN);
     }
 
     private void validateReferenceData(Trade trade) {
