@@ -34,6 +34,19 @@ export const SingleTradeModal: React.FC<SingleTradeModalProps> = (props) => {
     const [snackbarType, setSnackbarType] = React.useState<'success' | 'error'>("success");
     const [loading, setLoading] = React.useState(false);
 
+
+    const validateSettlementInstructions = (text?: string): string | null => {
+  if (!text || text.trim() === "") return null; // optional
+  const trimmed = text.trim();
+  if (trimmed.length < 10) return "Settlement instructions must be at least 10 characters";
+  if (trimmed.length > 500) return "Settlement instructions must be at most 500 characters";
+  const pattern = /^[a-zA-Z0-9 .,:/()\-\n]+$/;
+  if (!pattern.test(trimmed)) {
+    return "Settlement instructions contain invalid characters. Allowed: letters, numbers, space, . , : / ( ) - and new lines";
+  }
+  return null;
+};
+
     React.useEffect(() => {
         setEditableTrade(props.trade ?? getDefaultTrade());
         setCashflowModalOpen(false);
@@ -131,9 +144,21 @@ export const SingleTradeModal: React.FC<SingleTradeModalProps> = (props) => {
             return;
         }
 
+       const siError = validateSettlementInstructions(editableTrade.settlementInstructions as string | undefined);
+if (siError) {
+  setSnackbarMsg(siError);
+  setSnackbarType('error');
+  setSnackbarOpen(true);
+  setTimeout(() => setSnackbarOpen(false), 3000);
+  setLoading(false);
+  return;
+} 
+
         let tradeDto = formatTradeForBackend(editableTrade);
         // Convert empty strings for numeric/date fields to null before sending to backend
         tradeDto = convertEmptyStringsToNull(tradeDto);
+
+        (tradeDto as any).settlementInstructions = editableTrade.settlementInstructions ?? null;
 
         try {
             if (editableTrade.tradeId) {
@@ -245,6 +270,41 @@ export const SingleTradeModal: React.FC<SingleTradeModalProps> = (props) => {
                             mode={props.mode}
                             onFieldChange={props.mode === 'edit' ? handleFieldChange : undefined}
                         />
+                        {/* 🔽 NEW: Settlement Instructions block (visible in view + edit) */}
+<div className="mt-4">
+  <label className="block text-sm font-medium mb-1">
+    Settlement Instructions <span className="text-xs text-gray-500">(optional, 10–500 chars)</span>
+  </label>
+
+  {props.mode === 'edit' ? (
+    <>
+      <textarea
+        value={(editableTrade?.settlementInstructions as string) ?? ""}
+        onChange={(e) => handleFieldChange("settlementInstructions", e.target.value)}
+        rows={5}
+        maxLength={500}
+        placeholder={
+`Examples:
+• Settle via JPM New York, Account: 123456789, Further Credit: ABC Corp Trading Account
+• DVP settlement through Euroclear, ISIN confirmation required before settlement
+• Cash settlement only, wire instructions: Federal Reserve Bank routing 123456789
+• Physical delivery to warehouse facility, contact operations team for coordination`
+        }
+        className="w-[36rem] border rounded p-2 text-sm focus:outline-none focus:ring"
+      />
+      <div className="mt-1 flex justify-between text-xs">
+        <span className="text-gray-500">Allowed: letters, numbers, space, . , : / ( ) - and new lines</span>
+        <span className="text-gray-500">
+          {(editableTrade?.settlementInstructions?.length ?? 0)}/500
+        </span>
+      </div>
+    </>
+  ) : (
+    <div className="whitespace-pre-wrap text-sm p-2 rounded bg-gray-50 border">
+      {editableTrade?.settlementInstructions || <span className="text-gray-400">No settlement instructions</span>}
+    </div>
+  )}
+</div>
                     </div>
                     {tradeLegs.length > 0 && (
                         <div className="flex flex-row gap-x-8 h-fit justify-center mt-0">
