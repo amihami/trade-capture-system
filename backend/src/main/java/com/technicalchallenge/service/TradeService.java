@@ -429,6 +429,7 @@ public class TradeService {
         trade.setTradeMaturityDate(dto.getTradeMaturityDate());
         trade.setTradeExecutionDate(dto.getTradeExecutionDate());
         trade.setUtiCode(dto.getUtiCode());
+        trade.setSettlementInstructions(dto.getSettlementInstructions());
         trade.setValidityStartDate(dto.getValidityStartDate());
         trade.setLastTouchTimestamp(LocalDateTime.now());
         return trade;
