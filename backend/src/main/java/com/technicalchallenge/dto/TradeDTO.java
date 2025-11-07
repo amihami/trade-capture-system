@@ -2,6 +2,7 @@ package com.technicalchallenge.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -41,6 +42,10 @@ public class TradeDTO {
     private Boolean active;
     private LocalDateTime createdDate;
     private LocalDateTime deactivatedDate;
+
+    @Size(min = 10, max = 500, message = "Settlement instructions must be between 10 and 500 characters")
+    @jakarta.validation.constraints.Pattern(regexp = "^[a-zA-Z0-9 .,:/()\\-\\n]+$", message = "Settlement instructions contain invalid characters")
+    private String settlementInstructions;
 
     // Book reference
     private Long bookId;

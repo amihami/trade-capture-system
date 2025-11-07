@@ -28,6 +28,7 @@ export interface Trade {
   utiCode?: string;
   lastTouchTimestamp?: string;
   validityStartDate?: string;
+  settlementInstructions?: string;
   tradeLegs: TradeLeg[];
   [key: string]: unknown;
 }

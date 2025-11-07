@@ -11,7 +11,6 @@ import com.technicalchallenge.repository.ApplicationUserRepository;
 import com.technicalchallenge.repository.BookRepository;
 import com.technicalchallenge.repository.CounterpartyRepository;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -24,21 +23,25 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-
 @Service
 public class TradeValidationService {
 
     private static final Logger log = LoggerFactory.getLogger(TradeValidationService.class);
 
-    public static final String OPERATION_CREATE    = "CREATE";
-    public static final String OPERATION_AMEND     = "AMEND";
+    public static final String OPERATION_CREATE = "CREATE";
+    public static final String OPERATION_AMEND = "AMEND";
     public static final String OPERATION_TERMINATE = "TERMINATE";
-    public static final String OPERATION_CANCEL    = "CANCEL";
-    public static final String OPERATION_VIEW      = "VIEW";
+    public static final String OPERATION_CANCEL = "CANCEL";
+    public static final String OPERATION_VIEW = "VIEW";
 
-    @Autowired private ApplicationUserRepository applicationUserRepository;
-    @Autowired private BookRepository bookRepository;
-    @Autowired private CounterpartyRepository counterpartyRepository;
+    @Autowired
+    private ApplicationUserRepository applicationUserRepository;
+    @Autowired
+    private BookRepository bookRepository;
+    @Autowired
+    private CounterpartyRepository counterpartyRepository;
+    @Autowired
+    private com.technicalchallenge.repository.UserPrivilegeRepository userPrivilegeRepository;
 
     @Transactional
     public ValidationResult validateTradeBusinessRules(TradeDTO tradeDTO) {
@@ -47,6 +50,10 @@ public class TradeValidationService {
         applyCrossLegRules(tradeDTO.getTradeLegs(), tradeDTO, result);
         applyEntityStatusRules(tradeDTO, result);
         return result;
+    }
+
+    private static boolean opEquals(String a, String b) {
+        return a != null && b != null && a.equalsIgnoreCase(b);
     }
 
     @Transactional
@@ -59,33 +66,75 @@ public class TradeValidationService {
 
         ApplicationUser user = userOpt.get();
 
-    
         if (!user.isActive()) {
             log.warn("Privilege check: user '{}' is not active", user.getLoginId());
             return false;
         }
 
-        String role = resolveUserRole(user);
-        if (role == null) {
-            log.warn("Privilege check: role not resolvable for user '{}'", user.getLoginId());
-            return false; 
+        final String op = (operation == null ? "" : operation).toUpperCase(Locale.ROOT);
+
+        // --- Privilege-gated: prefer explicit privileges on the user if present ---
+        // CREATE
+        if (opEquals(op, OPERATION_CREATE) && hasPrivilege(user, "BOOK_TRADE")) {
+            return true;
+        }
+        // AMEND
+        if (opEquals(op, OPERATION_AMEND) && hasPrivilege(user, "AMEND_TRADE")) {
+            return true;
+        }
+        // VIEW
+        if (opEquals(op, OPERATION_VIEW) && hasPrivilege(user, "READ_TRADE")) {
+            return true;
+        }
+        // TERMINATE / CANCEL -> typically covered by AMEND_TRADE permission
+        if ((opEquals(op, OPERATION_TERMINATE) || opEquals(op, OPERATION_CANCEL))
+                && hasPrivilege(user, "AMEND_TRADE")) {
+            return true;
         }
 
-        String op = (operation == null ? "" : operation).toUpperCase(Locale.ROOT);
+        // --- Role fallback: support your actual seed roles as well ---
+        final String role = normalizeRole(resolveUserRole(user));
+        if (role == null) {
+            log.warn("Privilege check: role not resolvable for user '{}'", user.getLoginId());
+            return false;
+        }
 
         switch (role) {
             case "TRADER":
-                return opEqualsAny(op, OPERATION_CREATE, OPERATION_AMEND, OPERATION_TERMINATE, OPERATION_CANCEL, OPERATION_VIEW);
+            case "TRADER_SALES":
+                return opEqualsAny(op, OPERATION_CREATE, OPERATION_AMEND, OPERATION_TERMINATE, OPERATION_CANCEL,
+                        OPERATION_VIEW);
             case "SALES":
                 return opEqualsAny(op, OPERATION_CREATE, OPERATION_AMEND, OPERATION_VIEW);
             case "MIDDLE_OFFICE":
+            case "MO": // seed uses "MO"
                 return opEqualsAny(op, OPERATION_AMEND, OPERATION_VIEW);
             case "SUPPORT":
                 return opEqualsAny(op, OPERATION_VIEW);
+            case "ADMIN":
+            case "SUPERUSER":
+                return true; // full access
             default:
                 log.warn("Privilege check: unknown role '{}' for user '{}'", role, user.getLoginId());
                 return false;
         }
+    }
+
+    private boolean hasPrivilege(ApplicationUser user, String privilegeName) {
+        if (user == null || user.getId() == null || privilegeName == null)
+            return false;
+        return userPrivilegeRepository
+                .existsByUserIdAndPrivilegeNameIgnoreCase(user.getId(), privilegeName);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null)
+            return null;
+        role = role.trim().toUpperCase(Locale.ROOT);
+        if ("MO".equals(role))
+            return "MIDDLE_OFFICE";
+        // leave TRADER_SALES, ADMIN, SUPERUSER, SUPPORT as-is
+        return role;
     }
 
     @Transactional
@@ -95,10 +144,9 @@ public class TradeValidationService {
         return result;
     }
 
-
     private void applyDateRules(TradeDTO tradeDTO, ValidationResult result) {
-        LocalDate tradeDate    = tradeDTO.getTradeDate();
-        LocalDate startDate    = tradeDTO.getTradeStartDate();
+        LocalDate tradeDate = tradeDTO.getTradeDate();
+        LocalDate startDate = tradeDTO.getTradeStartDate();
         LocalDate maturityDate = tradeDTO.getTradeMaturityDate();
 
         if (tradeDate != null && startDate != null && startDate.isBefore(tradeDate)) {
@@ -120,7 +168,7 @@ public class TradeValidationService {
 
     private void applyCrossLegRules(List<TradeLegDTO> legs, TradeDTO tradeDTO, ValidationResult result) {
         if (legs == null || legs.size() != 2) {
-            return; 
+            return;
         }
 
         TradeLegDTO leg1 = legs.get(0);
@@ -142,7 +190,7 @@ public class TradeValidationService {
     }
 
     private void validateLegTypeAndFields(String label, TradeLegDTO leg, ValidationResult result) {
-        String legType = safeLower(leg.getLegType()); 
+        String legType = safeLower(leg.getLegType());
         if ("floating".equals(legType)) {
             if (isBlank(leg.getIndexName())) {
                 result.addError(label + ": floating leg must have an index specified.");
@@ -163,7 +211,10 @@ public class TradeValidationService {
         } else if (!isBlank(tradeDTO.getBookName())) {
             bookRepository.findByBookName(tradeDTO.getBookName())
                     .filter(Book::isActive)
-                    .orElseGet(() -> { result.addError("Book must exist and be active."); return null; });
+                    .orElseGet(() -> {
+                        result.addError("Book must exist and be active.");
+                        return null;
+                    });
         }
 
         if (tradeDTO.getCounterpartyId() != null) {
@@ -174,7 +225,10 @@ public class TradeValidationService {
         } else if (!isBlank(tradeDTO.getCounterpartyName())) {
             counterpartyRepository.findByName(tradeDTO.getCounterpartyName())
                     .filter(Counterparty::isActive)
-                    .orElseGet(() -> { result.addError("Counterparty must exist and be active."); return null; });
+                    .orElseGet(() -> {
+                        result.addError("Counterparty must exist and be active.");
+                        return null;
+                    });
         }
 
         if (tradeDTO.getTraderUserId() != null) {
@@ -185,7 +239,10 @@ public class TradeValidationService {
         } else if (!isBlank(tradeDTO.getTraderUserName())) {
             applicationUserRepository.findByLoginId(tradeDTO.getTraderUserName().toLowerCase(Locale.ROOT))
                     .filter(ApplicationUser::isActive)
-                    .orElseGet(() -> { result.addError("Trader user must exist and be active."); return null; });
+                    .orElseGet(() -> {
+                        result.addError("Trader user must exist and be active.");
+                        return null;
+                    });
         }
 
         if (tradeDTO.getTradeInputterUserId() != null) {
@@ -196,13 +253,16 @@ public class TradeValidationService {
         } else if (!isBlank(tradeDTO.getInputterUserName())) {
             applicationUserRepository.findByLoginId(tradeDTO.getInputterUserName().toLowerCase(Locale.ROOT))
                     .filter(ApplicationUser::isActive)
-                    .orElseGet(() -> { result.addError("Inputter user must exist and be active."); return null; });
+                    .orElseGet(() -> {
+                        result.addError("Inputter user must exist and be active.");
+                        return null;
+                    });
         }
     }
 
-   
     private Optional<ApplicationUser> resolveUser(String userId) {
-        if (userId == null || userId.isBlank()) return Optional.empty();
+        if (userId == null || userId.isBlank())
+            return Optional.empty();
         try {
             long id = Long.parseLong(userId);
             return applicationUserRepository.findById(id);
@@ -213,13 +273,15 @@ public class TradeValidationService {
 
     private String resolveUserRole(ApplicationUser user) {
         UserProfile profile = user.getUserProfile();
-        if (profile == null || profile.getUserType() == null) return null;
+        if (profile == null || profile.getUserType() == null)
+            return null;
         return profile.getUserType().toUpperCase(Locale.ROOT);
     }
 
     private static boolean opEqualsAny(String op, String... allowed) {
         for (String a : allowed) {
-            if (op.equalsIgnoreCase(a)) return true;
+            if (op.equalsIgnoreCase(a))
+                return true;
         }
         return false;
     }

@@ -33,6 +33,7 @@ public class TradeMapper {
         dto.setTradeMaturityDate(trade.getTradeMaturityDate());
         dto.setTradeExecutionDate(trade.getTradeExecutionDate());
         dto.setUtiCode(trade.getUtiCode());
+        dto.setSettlementInstructions(trade.getSettlementInstructions());
         dto.setLastTouchTimestamp(trade.getLastTouchTimestamp());
         dto.setValidityStartDate(trade.getValidityStartDate());
         dto.setValidityEndDate(trade.getValidityEndDate());
@@ -100,6 +101,7 @@ public class TradeMapper {
         trade.setTradeMaturityDate(dto.getTradeMaturityDate());
         trade.setTradeExecutionDate(dto.getTradeExecutionDate());
         trade.setUtiCode(dto.getUtiCode());
+        trade.setSettlementInstructions(dto.getSettlementInstructions());
         trade.setLastTouchTimestamp(dto.getLastTouchTimestamp());
         trade.setValidityStartDate(dto.getValidityStartDate());
         trade.setValidityEndDate(dto.getValidityEndDate());

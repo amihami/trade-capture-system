@@ -110,6 +110,23 @@ public class TradeController {
         return ResponseEntity.ok(dtoPage);
     }
 
+    @GetMapping("/search/settlement-instructions")
+    @Operation(summary = "Search trades by settlement instructions (partial, case-insensitive)", description = "Returns trades whose settlement instructions contain the given text.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = TradeDTO.class)))
+    })
+    public ResponseEntity<List<TradeDTO>> searchBySettlementInstructions(
+            @Parameter(description = "Partial text to search within settlement instructions (case-insensitive)", required = true) @RequestParam String instructions) {
+
+        logger.info("Searching trades by settlement instructions containing: {}", instructions);
+        List<TradeDTO> results = tradeService.searchBySettlementInstructions(instructions)
+                .stream()
+                .map(tradeMapper::toDto)
+                .toList();
+
+        return ResponseEntity.ok(results);
+    }
+
     @GetMapping("/filter")
     @Operation(summary = "List trades, paginated blotter", description = "Returns paginated list of trades without filters. Combine with pageable query params (?page=&size=&sort).")
     @ApiResponses({
@@ -262,6 +279,38 @@ public class TradeController {
         } catch (Exception e) {
             logger.error("Error updating trade: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body("Error updating trade: " + e.getMessage());
+        }
+    }
+
+    @PutMapping("/{id}/settlement-instructions")
+    @Operation(summary = "Update settlement instructions for an existing trade", description = "Edits only the settlement instructions field on the latest active version of the trade.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Settlement instructions updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = TradeDTO.class))),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges to update settlement instructions"),
+            @ApiResponse(responseCode = "404", description = "Trade not found")
+    })
+    public ResponseEntity<?> updateSettlementInstructions(
+            @Parameter(description = "Trade ID", required = true) @PathVariable Long id,
+            @Valid @RequestBody com.technicalchallenge.dto.SettlementInstructionsUpdateDTO request) {
+
+        String performedBy = request.getPerformedBy();
+        if (performedBy == null || performedBy.isBlank()
+                || !tradeValidationService.validateUserPrivileges(
+                        performedBy, TradeValidationService.OPERATION_AMEND, null)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("User not authorised to AMEND settlement instructions.");
+        }
+
+        try {
+            Trade updated = tradeService.updateSettlementInstructions(id, request.getSettlementInstructions());
+            TradeDTO responseDTO = tradeMapper.toDto(updated);
+            return ResponseEntity.ok(responseDTO);
+        } catch (RuntimeException ex) {
+            logger.error("Error updating settlement instructions: {}", ex.getMessage(), ex);
+            if (ex.getMessage() != null && ex.getMessage().startsWith("Trade not found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+            }
+            return ResponseEntity.badRequest().body("Error updating settlement instructions: " + ex.getMessage());
         }
     }
 

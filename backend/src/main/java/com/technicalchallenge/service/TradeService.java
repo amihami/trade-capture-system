@@ -118,6 +118,41 @@ public class TradeService {
         return tradeRepository.findAll(spec, pageable);
     }
 
+    @Transactional(readOnly = true)
+    public List<Trade> searchBySettlementInstructions(String instructions) {
+        if (instructions == null || instructions.isBlank()) {
+            return List.of();
+        }
+        return tradeRepository.findByActiveTrueAndSettlementInstructionsContainingIgnoreCase(instructions.trim());
+    }
+
+    @Transactional
+    public Trade updateSettlementInstructions(Long tradeId, String settlementInstructions) {
+        Optional<Trade> tradeOpt = getTradeById(tradeId);
+        if (tradeOpt.isEmpty()) {
+            throw new RuntimeException("Trade not found: " + tradeId);
+        }
+
+        Trade trade = tradeOpt.get();
+        if (settlementInstructions != null) {
+            String trimmed = settlementInstructions.trim();
+            if (!trimmed.isEmpty()) {
+                if (trimmed.length() < 10 || trimmed.length() > 500) {
+                    throw new IllegalArgumentException("Settlement instructions must be between 10 and 500 characters");
+                }
+                if (!trimmed.matches("^[a-zA-Z0-9 .,:/()\\-\\n]+$")) {
+                    throw new IllegalArgumentException("Settlement instructions contain invalid characters");
+                }
+            }
+            trade.setSettlementInstructions(trimmed.isEmpty() ? null : trimmed);
+        } else {
+            trade.setSettlementInstructions(null);
+        }
+
+        trade.setLastTouchTimestamp(LocalDateTime.now());
+        return tradeRepository.save(trade);
+    }
+
     @Transactional
     public Trade createTrade(TradeDTO tradeDTO) {
         logger.info("Creating new trade with ID: {}", tradeDTO.getTradeId());
@@ -429,6 +464,7 @@ public class TradeService {
         trade.setTradeMaturityDate(dto.getTradeMaturityDate());
         trade.setTradeExecutionDate(dto.getTradeExecutionDate());
         trade.setUtiCode(dto.getUtiCode());
+        trade.setSettlementInstructions(dto.getSettlementInstructions());
         trade.setValidityStartDate(dto.getValidityStartDate());
         trade.setLastTouchTimestamp(LocalDateTime.now());
         return trade;
