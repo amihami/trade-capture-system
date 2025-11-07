@@ -11,6 +11,8 @@ const api = axios.create({
 
 export const fetchTrades = () => api.get('/trades');
 
+export const searchTradesBySettlement = (q: string) => api.get('/trades/search/settlement-instructions', { params: { instructions: q } });
+
 export const fetchAllUsers = async () => {
   console.log("Fetching all users from the API");
   return await api.get('/users').then((res) => {return res});
