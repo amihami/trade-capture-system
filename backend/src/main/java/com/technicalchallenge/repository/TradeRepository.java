@@ -20,13 +20,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
-
-
-
-
 @Repository
 public interface TradeRepository extends JpaRepository<Trade, Long>, JpaSpecificationExecutor<Trade> {
-    // Existing methods
     List<Trade> findByTradeId(Long tradeId);
 
     @Query("SELECT MAX(t.tradeId) FROM Trade t")
@@ -35,8 +30,9 @@ public interface TradeRepository extends JpaRepository<Trade, Long>, JpaSpecific
     @Query("SELECT MAX(t.version) FROM Trade t WHERE t.tradeId = :tradeId")
     Optional<Integer> findMaxVersionByTradeId(@Param("tradeId") Long tradeId);
 
-    // NEW METHODS for service layer compatibility
     Optional<Trade> findByTradeIdAndActiveTrue(Long tradeId);
+
+    List<Trade> findByActiveTrueAndSettlementInstructionsContainingIgnoreCase(String instructions);
 
     List<Trade> findByActiveTrueOrderByTradeIdDesc();
 
@@ -44,7 +40,7 @@ public interface TradeRepository extends JpaRepository<Trade, Long>, JpaSpecific
     Optional<Trade> findLatestActiveVersionByTradeId(@Param("tradeId") Long tradeId);
 
     @Override
-    @EntityGraph(attributePaths = {"book", "counterparty", "tradeStatus", "traderUser"})
+    @EntityGraph(attributePaths = { "book", "counterparty", "tradeStatus", "traderUser" })
     @NonNull
     Page<Trade> findAll(@Nullable Specification<Trade> spec, @NonNull Pageable pageable);
 }
