@@ -35,13 +35,81 @@ INSERT INTO counterparty (id, name, address, phone_number, internal_code, create
   (1000, 'BigBank', '1 Bank St', '123-456-7890', 1001, '2024-01-01', '2025-06-02', true),
   (1001, 'MegaFund', '2 Fund Ave', '987-654-3210', 1002, '2024-01-01', '2025-06-02', true);
 
--- Sample Trades
-INSERT INTO trade (id, trade_id, version, book_id, counterparty_id, trader_user_id, inputter_user_id, trade_type_id, trade_sub_type_id, trade_status_id,
-                   trade_date, trade_start_date, trade_maturity_date, trade_execution_date, uti_code, last_touch_timestamp, validity_start_date, validity_end_date,
-                   active, created_date, deactivated_date) VALUES
-  (1000, 100001, 1, 1000, 1000, 1003, 1003, 1001, 1003, 1004, '2024-06-01', '2024-06-03', '2029-06-03', '2024-06-01', 'UTI-001', '2024-06-01T10:30:00', '2024-06-01', null, true, '2024-06-01T10:30:00', null),
-  (1001, 100002, 1, 1001, 1001, 1005, 1005, 1000, 1000, 1004, '2024-06-02', '2024-06-02', '2024-06-04', '2024-06-02', 'UTI-002', '2024-06-02T11:15:00', '2024-06-02', null, true, '2024-06-02T11:15:00', null);
-
+-- Sample Trades (updated: added settlement_instructions column/value)
+INSERT INTO
+    trade (
+        id,
+        trade_id,
+        version,
+        book_id,
+        counterparty_id,
+        trader_user_id,
+        inputter_user_id,
+        trade_type_id,
+        trade_sub_type_id,
+        trade_status_id,
+        trade_date,
+        trade_start_date,
+        trade_maturity_date,
+        trade_execution_date,
+        uti_code,
+        last_touch_timestamp,
+        validity_start_date,
+        validity_end_date,
+        active,
+        created_date,
+        deactivated_date,
+        settlement_instructions
+    )
+VALUES (
+        1000,
+        100001,
+        1,
+        1000,
+        1000,
+        1003,
+        1003,
+        1001,
+        1003,
+        1004,
+        '2024-06-01',
+        '2024-06-03',
+        '2029-06-03',
+        '2024-06-01',
+        'UTI-001',
+        '2024-06-01T10:30:00',
+        '2024-06-01',
+        null,
+        true,
+        '2024-06-01T10:30:00',
+        null,
+        'Settle via JPM New York, Account: 123456789, Further Credit: BigBank Ops'
+    ),
+    (
+        1001,
+        100002,
+        1,
+        1001,
+        1001,
+        1005,
+        1005,
+        1000,
+        1000,
+        1004,
+        '2024-06-02',
+        '2024-06-02',
+        '2024-06-04',
+        '2024-06-02',
+        'UTI-002',
+        '2024-06-02T11:15:00',
+        '2024-06-02',
+        null,
+        true,
+        '2024-06-02T11:15:00',
+        null,
+        'DVP settlement through Euroclear, ISIN confirmation required before settlement'
+    );
+   
 -- Sample Trade Legs
 INSERT INTO trade_leg (leg_id, notional, rate, trade_id, currency_id, leg_rate_type_id, index_id, holiday_calendar_id,
                        calculation_period_schedule_id, payment_business_day_convention_id, fixing_business_day_convention_id, pay_rec_id,

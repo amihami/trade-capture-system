@@ -53,6 +53,9 @@ public class Trade {
 
     private String utiCode;
 
+    @Column(name = "settlement_instructions", length = 500)
+    private String settlementInstructions;
+
     // Date fields
     private LocalDate tradeDate;
     private LocalDate tradeStartDate;
